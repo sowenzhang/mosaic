@@ -1,37 +1,79 @@
-# Mosaic - MCP-Powered PWA Builder
+# Mosaic - Intelligent PWA Companion
 
-A template-based no-code builder for creating Progressive Web Apps (PWAs) using Model Context Protocol (MCP) servers as widget sources.
+> *"Tell us the goal, we'll build the app."*
 
-## 🎯 Project Overview
+Mosaic creates living, evolving Progressive Web Apps that adapt to your context and goals using Model Context Protocol (MCP) capabilities.
 
-Mosaic is a hackathon project that enables users to build custom PWAs by composing widgets from various MCP servers. Think of it like an Android phone's home screen where you can add widgets, but for web applications.
+## 🎯 The Problem We Solve
 
-### Key Features
+Most people don't know what features they need until it's too late. Traditional app builders give you a blank canvas and ask "what do you want?" Mosaic flips this: **tell us what you're trying to accomplish, and we'll give you the app you need**.
 
-- **Template-Based Builder**: Start with 2-3 pre-built templates
-- **MCP Registry**: Central registry for discovering and managing MCP servers
-- **Drag & Drop Interface**: Intuitive widget arrangement and ordering
-- **Web Component Architecture**: Each MCP server provides a rendering API for web components
-- **PWA Publishing**: Export as a fully functional Progressive Web App
-- **Shareable Apps**: Published apps can be shared with others
+## 🌟 What Makes Mosaic Different
 
-### Example Use Case: "Travel Pal" App
+**Compared to GitHub Spark or Google AI Studio:**
 
-Users can create a personalized travel companion app by combining:
+- **They say**: "Tell us what app you want, we'll give you a blank canvas"
+- **We say**: "Tell us what you're trying to do, we'll give you the app you need, and it updates itself"
 
-- Weather widget (from weather MCP server)
-- Calendar widget (from calendar MCP server)
-- Currency exchange widget (from finance MCP server)
+## 🔄 Apps as Living Systems
 
-The final result is a cohesive PWA that loads and orchestrates multiple MCP-powered widgets.
+Unlike static "publish once" apps, Mosaic creates **living companions** that evolve as your context changes:
 
-## 🏗️ Architecture
+- **Location-aware**: Different widgets when you're home vs. traveling
+- **Time-sensitive**: Morning routine vs. evening wind-down apps
+- **Role-adaptive**: Work mode vs. family time configurations
+- **Goal-oriented**: Automatically surface relevant capabilities
 
-1. **Frontend**: Svelte-based builder interface with drag-and-drop functionality
-2. **MCP Registry**: Database of registered MCP servers and their capabilities
-3. **Widget System**: Web components rendered from MCP server APIs
-4. **PWA Generator**: Builds deployable Progressive Web Apps
-5. **Publishing Platform**: Hosts and shares completed applications
+## 🧠 Intelligent App Generation
+
+1. **Describe Your Goal**: "I'm visiting Tokyo for 7 days. Here's my flight number."
+2. **AI Analysis**: Mosaic understands your intent and context
+3. **Auto-Assembly**: Pulls relevant widgets from MCP servers:
+   - Flight tracking & airport info
+   - Tokyo weather & local conditions
+   - Currency converter (JPY)
+   - Tokyo transit & maps
+   - Local events & recommendations
+   - Translation tools
+4. **Adaptive Layouts**: Choose from templates that fit your usage patterns
+5. **Living Updates**: App evolves as your trip progresses
+
+## 🔌 MCP-Powered Architecture
+
+Because everything is exposed via MCP manifests, Mosaic can:
+
+- **Auto-discover** relevant capabilities
+- **Intelligently wire** the right widgets for your goals
+- **Continuously adapt** as new MCP servers come online
+- **Cross-reference** data between different services
+
+## 🏗️ Technical Architecture
+
+1. **AI Goal Parser**: Natural language → app requirements
+2. **MCP Discovery Engine**: Finds relevant capabilities from registered servers
+3. **Intelligent Assembly**: Auto-wires widgets based on context and goals
+4. **Adaptive Templates**: Multiple layouts optimized for different use cases
+5. **Living Updates**: Continuous evolution based on usage and context
+
+## 💡 Strategic Vision
+
+### Windows as the OS for Dynamic Task Apps
+
+- Self-updating applications that span devices
+- Context-aware experiences that follow you
+- Seamless integration with your digital ecosystem
+- The stickiness factor: not a novelty, but a companion that grows with you
+
+## 🚀 Example Scenarios
+
+**Business Traveler**: "I have meetings in Singapore next week"
+→ Flight tracking, weather, currency, local business hours, meeting scheduler, timezone converter
+
+**New Parent**: "I just had a baby and need to track everything"
+→ Feeding tracker, sleep monitor, pediatrician finder, milestone tracker, baby store locator
+
+**College Student**: "I'm starting freshman year at UC Berkeley"
+→ Class schedule, campus map, dining hall hours, study groups, local weather, campus events
 
 ## 🚀 Getting Started
 

@@ -1,246 +1,192 @@
 <script lang="ts">
-	let selectedTemplate: string | null = null;
+	import { onMount } from 'svelte';
+	import '$lib/styles/chat.css';
 
-	const templates = [
-		{
-			id: 'three-row',
-			name: '3-Row Layout',
-			description: 'Three horizontal widgets stacked vertically',
-			preview: 'three-row-preview'
-		},
-		{
-			id: 'two-column-plus',
-			name: '2+1 Layout',
-			description: 'Two widgets in first row, one large widget below',
-			preview: 'two-column-plus-preview'
-		}
+	let userInput = '';
+	let isLoading = false;
+	let conversation: Array<{ type: 'user' | 'assistant'; content: string; timestamp: Date }> = [];
+	let suggestedInputs = [
+		"I'm visiting Tokyo for 7 days. Here is my flight number JL123.",
+		'I just had a baby and need to track everything.',
+		"I'm starting my freshman year at UC Berkeley.",
+		'I have business meetings in Singapore next week.'
 	];
 
-	function selectTemplate(templateId: string) {
-		selectedTemplate = templateId;
+	let textareaElement: HTMLTextAreaElement;
+
+	onMount(() => {
+		// Add initial assistant message
+		conversation = [
+			{
+				type: 'assistant',
+				content:
+					"👋 Hi! I'm here to help you create the perfect app for your goals.\n\nJust tell me what you're trying to accomplish, and I'll build you a personalized app with all the widgets you need. The more context you provide, the better I can tailor it for you!",
+				timestamp: new Date()
+			}
+		];
+	});
+
+	function autoResize() {
+		if (textareaElement) {
+			textareaElement.style.height = 'auto';
+			textareaElement.style.height = textareaElement.scrollHeight + 'px';
+		}
 	}
 
-	function startBuilding() {
-		if (selectedTemplate) {
-			// Navigate to builder with selected template
-			window.location.href = `/create/builder?template=${selectedTemplate}`;
+	function handleKeyDown(event: KeyboardEvent) {
+		if (event.key === 'Enter' && !event.shiftKey) {
+			event.preventDefault();
+			handleSubmit();
 		}
+	}
+
+	function useSuggestion(suggestion: string) {
+		userInput = suggestion;
+		autoResize();
+		textareaElement?.focus();
+	}
+
+	async function handleSubmit() {
+		if (!userInput.trim() || isLoading) return;
+
+		const userMessage = userInput.trim();
+		userInput = '';
+		autoResize();
+
+		// Add user message to conversation
+		conversation = [
+			...conversation,
+			{
+				type: 'user',
+				content: userMessage,
+				timestamp: new Date()
+			}
+		];
+
+		isLoading = true;
+
+		// Simulate AI processing
+		setTimeout(() => {
+			// Add assistant response
+			const response = generateAIResponse(userMessage);
+			conversation = [
+				...conversation,
+				{
+					type: 'assistant',
+					content: response,
+					timestamp: new Date()
+				}
+			];
+			isLoading = false;
+
+			// After AI responds, navigate to generated app
+			setTimeout(() => {
+				window.location.href = `/create/generated?goal=${encodeURIComponent(userMessage)}`;
+			}, 2000);
+		}, 1500);
+	}
+
+	function generateAIResponse(input: string): string {
+		const lowerInput = input.toLowerCase();
+
+		if (lowerInput.includes('tokyo') || lowerInput.includes('japan')) {
+			return "Perfect! I can see you're planning a trip to Tokyo. Let me create a comprehensive travel companion app for you.\n\n🎯 **Analyzing your needs:**\n- Flight tracking and airport information\n- Tokyo weather and local conditions\n- Currency converter (JPY/USD)\n- Tokyo transit and subway maps\n- Local events and restaurant recommendations\n- Real-time translation tools\n- Emergency contacts and embassy info\n\n✨ **Creating your personalized Tokyo Travel app...**";
+		} else if (lowerInput.includes('baby') || lowerInput.includes('newborn')) {
+			return "Congratulations on your new arrival! 👶 I'll create a comprehensive baby tracking app to help you through this exciting time.\n\n🎯 **Analyzing your needs:**\n- Feeding and diaper tracking\n- Sleep pattern monitoring\n- Growth and milestone tracker\n- Pediatrician finder and appointment scheduler\n- Baby-friendly store locator\n- Vaccination reminder system\n- Photo timeline for memories\n\n✨ **Creating your personalized Baby Care app...**";
+		} else if (
+			lowerInput.includes('college') ||
+			lowerInput.includes('berkeley') ||
+			lowerInput.includes('freshman')
+		) {
+			return 'Exciting! Starting college is a big step. 🎓 Let me create a student life app tailored for UC Berkeley.\n\n🎯 **Analyzing your needs:**\n- Class schedule and campus map\n- Dining hall hours and menus\n- Study group finder\n- Campus event calendar\n- Berkeley weather updates\n- Library hours and availability\n- Student services directory\n\n✨ **Creating your personalized Berkeley Student app...**';
+		} else if (
+			lowerInput.includes('business') ||
+			lowerInput.includes('singapore') ||
+			lowerInput.includes('meeting')
+		) {
+			return "Great! Business travel requires careful coordination. 💼 I'll create a professional travel companion for your Singapore meetings.\n\n🎯 **Analyzing your needs:**\n- Flight and meeting schedule sync\n- Singapore business hours and etiquette\n- Currency converter (SGD)\n- Local weather and dress code advice\n- Business district maps and transport\n- Restaurant recommendations for client dinners\n- Time zone coordination tools\n\n✨ **Creating your personalized Business Travel app...**";
+		} else {
+			return `Got it! I understand you want to ${input}. Let me analyze your goals and create the perfect app companion for you.\n\n🎯 **Analyzing your needs...**\n\nI'm identifying the most relevant widgets and capabilities from our MCP registry to match your specific situation.\n\n✨ **Creating your personalized app...**`;
+		}
+	}
+
+	function formatTimestamp(date: Date): string {
+		return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 	}
 </script>
 
-<div class="create-page">
-	<div class="page-header">
-		<h1>Create New App</h1>
-		<p>Choose a template to get started with your PWA</p>
+<div class="chat-page">
+	<div class="chat-header">
+		<h1>🧠 Tell Mosaic Your Goal</h1>
+		<p>Describe what you're trying to accomplish, and I'll build you the perfect app</p>
 	</div>
 
-	<div class="wizard">
-		<div class="step">
-			<h2>Step 1: Choose a Template</h2>
-			<p>Select a layout template for your app. You can customize it with widgets later.</p>
-
-			<div class="templates">
-				{#each templates as template}
-					<button
-						class="template-card"
-						class:selected={selectedTemplate === template.id}
-						on:click={() => selectTemplate(template.id)}
-						type="button"
-					>
-						<div class="template-preview {template.preview}">
-							{#if template.id === 'three-row'}
-								<div class="preview-widget"></div>
-								<div class="preview-widget"></div>
-								<div class="preview-widget"></div>
-							{:else if template.id === 'two-column-plus'}
-								<div class="preview-row">
-									<div class="preview-widget small"></div>
-									<div class="preview-widget small"></div>
-								</div>
-								<div class="preview-widget large"></div>
-							{/if}
+	<div class="chat-container">
+		<div class="conversation">
+			{#each conversation as message}
+				<div class="message {message.type}">
+					<div class="message-content">
+						<div class="message-text">
+							{@html message.content.replace(/\n/g, '<br>')}
 						</div>
-
-						<div class="template-info">
-							<h3>{template.name}</h3>
-							<p>{template.description}</p>
+						<div class="message-time">
+							{formatTimestamp(message.timestamp)}
 						</div>
+					</div>
+				</div>
+			{/each}
 
-						{#if selectedTemplate === template.id}
-							<div class="selected-indicator">✓</div>
-						{/if}
-					</button>
-				{/each}
-			</div>
+			{#if isLoading}
+				<div class="message assistant">
+					<div class="message-content">
+						<div class="typing-indicator">
+							<span></span>
+							<span></span>
+							<span></span>
+						</div>
+					</div>
+				</div>
+			{/if}
 		</div>
 
-		{#if selectedTemplate}
-			<div class="actions">
-				<button class="btn btn-primary" on:click={startBuilding}>
-					Continue with {templates.find(t => t.id === selectedTemplate)?.name}
-					<span>→</span>
-				</button>
+		{#if conversation.length <= 1}
+			<div class="suggestions">
+				<h3>💡 Try these examples:</h3>
+				<div class="suggestion-grid">
+					{#each suggestedInputs as suggestion}
+						<button class="suggestion-card" on:click={() => useSuggestion(suggestion)}>
+							{suggestion}
+						</button>
+					{/each}
+				</div>
 			</div>
 		{/if}
+
+		<div class="input-area">
+			<div class="input-container">
+				<textarea
+					bind:this={textareaElement}
+					bind:value={userInput}
+					placeholder="Describe your goal... (e.g., 'I'm visiting Tokyo for 7 days')"
+					on:input={autoResize}
+					on:keydown={handleKeyDown}
+					disabled={isLoading}
+					rows="1"
+				></textarea>
+				<button
+					class="send-button"
+					on:click={handleSubmit}
+					disabled={!userInput.trim() || isLoading}
+				>
+					{#if isLoading}
+						<div class="spinner"></div>
+					{:else}
+						<svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+							<path d="M2 21l21-9L2 3v7l15 2-15 2v7z" fill="currentColor" />
+						</svg>
+					{/if}
+				</button>
+			</div>
+		</div>
 	</div>
 </div>
-
-<style>
-	.create-page {
-		max-width: 1000px;
-		margin: 0 auto;
-	}
-
-	.page-header {
-		text-align: center;
-		margin-bottom: 3rem;
-	}
-
-	.page-header h1 {
-		font-size: 2.5rem;
-		margin-bottom: 0.5rem;
-		color: #333;
-	}
-
-	.page-header p {
-		font-size: 1.1rem;
-		color: #666;
-	}
-
-	.wizard {
-		background: white;
-		border-radius: 1rem;
-		padding: 2rem;
-		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-	}
-
-	.step h2 {
-		color: #333;
-		margin-bottom: 0.5rem;
-	}
-
-	.step p {
-		color: #666;
-		margin-bottom: 2rem;
-	}
-
-	.templates {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-		gap: 1.5rem;
-		margin-bottom: 2rem;
-	}
-
-	.template-card {
-		position: relative;
-		border: 2px solid #ddd;
-		border-radius: 1rem;
-		padding: 1.5rem;
-		cursor: pointer;
-		transition: all 0.2s ease;
-		background: #fafafa;
-	}
-
-	.template-card:hover {
-		border-color: #00d4ff;
-		transform: translateY(-2px);
-	}
-
-	.template-card.selected {
-		border-color: #00d4ff;
-		background: #f0fcff;
-	}
-
-	.template-preview {
-		width: 120px;
-		height: 200px;
-		margin: 0 auto 1rem auto;
-		background: white;
-		border: 2px solid #ddd;
-		border-radius: 0.5rem;
-		padding: 0.5rem;
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.preview-row {
-		display: flex;
-		gap: 0.5rem;
-		height: 30px;
-	}
-
-	.preview-widget {
-		background: #e0e0e0;
-		border-radius: 0.25rem;
-		flex: 1;
-		height: 30px;
-	}
-
-	.preview-widget.small {
-		height: 30px;
-	}
-
-	.preview-widget.large {
-		height: 60px;
-	}
-
-	.template-info {
-		text-align: center;
-	}
-
-	.template-info h3 {
-		margin-bottom: 0.5rem;
-		color: #333;
-	}
-
-	.template-info p {
-		font-size: 0.9rem;
-		color: #666;
-		margin: 0;
-	}
-
-	.selected-indicator {
-		position: absolute;
-		top: 1rem;
-		right: 1rem;
-		background: #00d4ff;
-		color: white;
-		width: 24px;
-		height: 24px;
-		border-radius: 50%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 0.8rem;
-		font-weight: bold;
-	}
-
-	.actions {
-		text-align: center;
-		padding-top: 2rem;
-		border-top: 1px solid #eee;
-		margin-top: 2rem;
-	}
-
-	.btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 1rem 2rem;
-		background: #00d4ff;
-		color: #000;
-		text-decoration: none;
-		border: none;
-		border-radius: 0.5rem;
-		font-weight: 600;
-		font-size: 1rem;
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
-
-	.btn:hover {
-		background: #00b8e6;
-		transform: translateY(-1px);
-	}
-</style>
