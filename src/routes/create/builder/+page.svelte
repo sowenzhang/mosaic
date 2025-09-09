@@ -14,6 +14,14 @@
 		width: number; // 1 (half row) or 2 (full row)
 	}
 
+	interface LayoutNode {
+		id: string;
+		type: 'row' | 'column' | 'widget';
+		widget?: Widget;
+		children?: LayoutNode[];
+		width?: number; // For columns: 1 or 2 (half or full width)
+	}
+
 	interface LayoutWidget extends Widget {
 		row: number;
 		column: number; // 0 or 1 (left or right), or 0 for full width
@@ -21,9 +29,10 @@
 
 	let goal = '';
 	let availableWidgets: Widget[] = [];
-	let layoutWidgets: LayoutWidget[] = [];
+	let layoutTree: LayoutNode[] = [];
 	let draggedWidget: Widget | null = null;
-	let draggedLayoutWidget: LayoutWidget | null = null;
+	let draggedNode: LayoutNode | null = null;
+	let selectedNodeId: string | null = null;
 
 	// Mock widget data that matches the generated widgets
 	const allMockWidgets: Record<number, Widget> = {
@@ -42,125 +51,218 @@
 		// Load the specific widgets for this app
 		const widgets = widgetIds.map(id => allMockWidgets[id]).filter(Boolean);
 
-		// Initialize layout with ALL widgets arranged properly
-		layoutWidgets = widgets.map((widget, index) => {
-			const row = Math.floor(index / 2);
-			const column = index % 2;
-			return {
-				...widget,
-				row,
-				column
-			};
-		});
+		// Initialize layout tree with widgets arranged in rows
+		layoutTree = [
+			{
+				id: 'row-1',
+				type: 'row',
+				children: widgets.slice(0, 2).map((widget, index) => ({
+					id: `widget-${widget.id}`,
+					type: 'widget',
+					widget,
+					width: widget.width
+				}))
+			},
+			{
+				id: 'row-2',
+				type: 'row',
+				children: widgets.slice(2, 4).map((widget, index) => ({
+					id: `widget-${widget.id}`,
+					type: 'widget',
+					widget,
+					width: widget.width
+				}))
+			}
+		];
 
-		// No available widgets initially - all are placed
-		availableWidgets = [];
+		// Remaining widgets are available for dragging
+		availableWidgets = widgets.slice(4);
 	});
 
-	function getMaxRows(): number {
-		return Math.max(3, Math.ceil((layoutWidgets.length + availableWidgets.length) / 2));
+	function generateId(): string {
+		return 'node-' + Math.random().toString(36).substr(2, 9);
 	}
 
-	function canDropAt(row: number, column: number, height: number, width: number): boolean {
-		// For full-width widgets, check the entire row
-		if (width === 2) {
-			for (let r = row; r < row + height; r++) {
-				const existing = layoutWidgets.find(w => w.row <= r && w.row + w.height > r);
-				if (existing) return false;
-			}
-		} else {
-			// For half-width widgets, check specific column
-			for (let r = row; r < row + height; r++) {
-				const existing = layoutWidgets.find(w =>
-					w.row <= r && w.row + w.height > r &&
-					((w.width === 2) || (w.width === 1 && w.column === column))
-				);
-				if (existing) return false;
-			}
-		}
-		return true;
-	}
-
-	function handleDragStart(event: DragEvent, widget: Widget | LayoutWidget) {
-		if ('row' in widget) {
-			draggedLayoutWidget = widget;
-			draggedWidget = null;
-		} else {
-			draggedWidget = widget;
-			draggedLayoutWidget = null;
-		}
-	}
-
-	function handleDragOver(event: DragEvent) {
-		event.preventDefault();
-	}
-
-	function handleDrop(event: DragEvent, targetRow: number, targetColumn: number) {
-		event.preventDefault();
-
-		if (draggedWidget) {
-			// Dropping from available widgets
-			if (canDropAt(targetRow, targetColumn, draggedWidget.height, draggedWidget.width)) {
-				const newColumn = draggedWidget.width === 2 ? 0 : targetColumn;
-				layoutWidgets = [...layoutWidgets, {
-					...draggedWidget,
-					row: targetRow,
-					column: newColumn
-				}];
-				availableWidgets = availableWidgets.filter(w => w.id !== draggedWidget!.id);
-			}
-		} else if (draggedLayoutWidget) {
-			// Moving existing widget
-			if (canDropAt(targetRow, targetColumn, draggedLayoutWidget.height, draggedLayoutWidget.width)) {
-				const newColumn = draggedLayoutWidget.width === 2 ? 0 : targetColumn;
-				layoutWidgets = layoutWidgets.map(w =>
-					w.id === draggedLayoutWidget!.id
-						? { ...w, row: targetRow, column: newColumn }
-						: w
-				);
-			}
-		}
-
-		draggedWidget = null;
-		draggedLayoutWidget = null;
-	}
-
-	function removeWidget(widget: LayoutWidget) {
-		layoutWidgets = layoutWidgets.filter(w => w.id !== widget.id);
-		availableWidgets = [...availableWidgets, {
-			id: widget.id,
-			name: widget.name,
-			description: widget.description,
-			category: widget.category,
-			serverName: widget.serverName,
-			icon: widget.icon,
-			height: widget.height,
-			width: widget.width
+	function addRow() {
+		layoutTree = [...layoutTree, {
+			id: generateId(),
+			type: 'row',
+			children: []
 		}];
 	}
 
-	function toggleWidgetHeight(widget: LayoutWidget) {
-		const newHeight = widget.height === 1 ? 2 : 1;
-		if (canDropAt(widget.row, widget.column, newHeight, widget.width)) {
-			layoutWidgets = layoutWidgets.map(w =>
-				w.id === widget.id ? { ...w, height: newHeight } : w
-			);
+	function addWidgetToRow(rowId: string, widget: Widget) {
+		layoutTree = layoutTree.map(row => {
+			if (row.id === rowId && row.type === 'row') {
+				return {
+					...row,
+					children: [...(row.children || []), {
+						id: `widget-${widget.id}`,
+						type: 'widget',
+						widget,
+						width: widget.width
+					}]
+				};
+			}
+			return row;
+		});
+
+		availableWidgets = availableWidgets.filter(w => w.id !== widget.id);
+	}
+
+	function removeWidget(nodeId: string) {
+		let removedWidget: Widget | null = null;
+
+		function removeFromTree(nodes: LayoutNode[]): LayoutNode[] {
+			return nodes.map(node => {
+				if (node.type === 'row' && node.children) {
+					const updatedChildren = node.children.filter(child => {
+						if (child.id === nodeId && child.widget) {
+							removedWidget = child.widget;
+							return false;
+						}
+						return true;
+					});
+					return { ...node, children: updatedChildren };
+				}
+				return node;
+			});
+		}
+
+		layoutTree = removeFromTree(layoutTree);
+		if (removedWidget) {
+			availableWidgets = [...availableWidgets, removedWidget];
 		}
 	}
 
-	function toggleWidgetWidth(widget: LayoutWidget) {
-		const newWidth = widget.width === 1 ? 2 : 1;
-		const newColumn = newWidth === 2 ? 0 : widget.column;
-		if (canDropAt(widget.row, newColumn, widget.height, newWidth)) {
-			layoutWidgets = layoutWidgets.map(w =>
-				w.id === widget.id ? { ...w, width: newWidth, column: newColumn } : w
-			);
+	function moveNode(fromIndex: number, toIndex: number, parentId?: string) {
+		// Implementation for moving nodes in the tree
+		// This would handle reordering widgets within rows or between rows
+	}
+
+	// Drag and Drop Handlers
+	function handleDragStart(e: DragEvent, widget: Widget, nodeId?: string) {
+		if (!e.dataTransfer) return;
+
+		draggedWidget = widget;
+		if (nodeId) {
+			draggedNode = { id: nodeId, type: 'widget', widget };
+		}
+
+		e.dataTransfer.effectAllowed = 'move';
+		e.dataTransfer.setData('text/plain', widget.id.toString());
+
+		// Add visual feedback
+		if (e.target instanceof HTMLElement) {
+			e.target.classList.add('dragging');
 		}
 	}
 
-	function saveApp() {
-		console.log('Saving app layout:', layoutWidgets);
+	function handleDragEnd(e: DragEvent) {
+		// Remove visual feedback
+		if (e.target instanceof HTMLElement) {
+			e.target.classList.remove('dragging');
+		}
+
+		// Clear drag state
+		draggedWidget = null;
+		draggedNode = null;
+
+		// Remove all drag-over classes
+		document.querySelectorAll('.drag-over').forEach(el => {
+			el.classList.remove('drag-over');
+		});
+	}
+
+	function handleDragOver(e: DragEvent) {
+		e.preventDefault();
+		if (e.dataTransfer) {
+			e.dataTransfer.dropEffect = 'move';
+		}
+
+		// Add visual feedback
+		if (e.currentTarget instanceof HTMLElement) {
+			e.currentTarget.classList.add('drag-over');
+		}
+	}
+
+	function handleDragLeave(e: DragEvent) {
+		// Remove visual feedback
+		if (e.currentTarget instanceof HTMLElement) {
+			e.currentTarget.classList.remove('drag-over');
+		}
+	}
+
+	function handleDropOnRow(e: DragEvent, rowId: string) {
+		e.preventDefault();
+
+		// Remove visual feedback
+		if (e.currentTarget instanceof HTMLElement) {
+			e.currentTarget.classList.remove('drag-over');
+		}
+
+		if (!draggedWidget) return;
+
+		// If dragging from another row, remove it first
+		if (draggedNode) {
+			removeWidget(draggedNode.id);
+		}
+
+		// Add widget to the target row
+		addWidgetToRow(rowId, draggedWidget);
+
+		// Clear drag state
+		draggedWidget = null;
+		draggedNode = null;
+	}
+
+	function handleDropOnEmptyRow(e: DragEvent, rowId: string) {
+		e.preventDefault();
+		handleDropOnRow(e, rowId);
+	}
+
+	function moveWidgetBetweenRows(sourceNodeId: string, targetRowId: string) {
+		let movedWidget: Widget | null = null;
+
+		// Find and remove the widget from source
+		layoutTree = layoutTree.map(row => {
+			if (row.type === 'row' && row.children) {
+				const updatedChildren = row.children.filter(child => {
+					if (child.id === sourceNodeId && child.widget) {
+						movedWidget = child.widget;
+						return false;
+					}
+					return true;
+				});
+				return { ...row, children: updatedChildren };
+			}
+			return row;
+		});
+
+		// Add widget to target row
+		if (movedWidget) {
+			addWidgetToRow(targetRowId, movedWidget);
+		}
+	}
+
+	function renderPhonePreview(): any[] {
+		return layoutTree.map(row => ({
+			...row,
+			children: row.children || []
+		}));
+	}	function saveApp() {
+		console.log('Saving app layout:', layoutTree);
 		alert('App layout saved successfully! (This is a demo)');
+	}
+
+	function goToPreview() {
+		const widgetIds = layoutTree
+			.flatMap(row => row.children || [])
+			.map(child => child.widget?.id)
+			.filter(Boolean)
+			.join(',');
+
+		window.location.href = `/create/preview?goal=${encodeURIComponent(goal)}&widgets=${widgetIds}&layout=${encodeURIComponent(JSON.stringify(layoutTree))}`;
 	}
 </script>
 
@@ -176,7 +278,7 @@
 		</div>
 
 		<div class="header-actions">
-			<button class="btn btn-secondary">Preview</button>
+			<button class="btn btn-secondary" on:click={goToPreview}>Preview</button>
 			<button class="btn btn-primary" on:click={saveApp}>Save App</button>
 		</div>
 	<div class="builder-content">
@@ -195,152 +297,140 @@
 					</div>
 
 					<div class="app-layout">
-						{#each Array(getMaxRows()) as _, rowIndex}
-							{@const fullWidthWidget = layoutWidgets.find(w => w.row === rowIndex && w.width === 2)}
-							<div class="layout-row">
-								{#if fullWidthWidget}
-									<!-- Full width widget -->
-									<div
-										class="widget-slot filled full-width"
-										class:tall={fullWidthWidget.height === 2}
-										draggable="true"
-										role="button"
-										tabindex="0"
-										on:dragstart={(e) => handleDragStart(e, fullWidthWidget)}
-									>
-										<div class="placed-widget">
-											<div class="widget-header">
-												<span class="widget-icon">{fullWidthWidget.icon}</span>
-												<span class="widget-name">{fullWidthWidget.name}</span>
-												<div class="widget-controls">
-													<button
-														class="control-btn"
-														on:click={() => toggleWidgetWidth(fullWidthWidget)}
-														title="Toggle width"
-													>
-														{fullWidthWidget.width === 1 ? '⬌' : '⬍'}
-													</button>
-													<button
-														class="control-btn"
-														on:click={() => toggleWidgetHeight(fullWidthWidget)}
-														title="Toggle height"
-													>
-														{fullWidthWidget.height === 1 ? '⬆️' : '⬇️'}
-													</button>
-													<button
-														class="remove-widget control-btn"
-														on:click={() => removeWidget(fullWidthWidget)}
-													>×</button>
-												</div>
-											</div>
-											<div class="widget-preview">Preview: {fullWidthWidget.name}</div>
-										</div>
-									</div>
-								{:else}
-									<!-- Half width widgets -->
-									{#each [0, 1] as columnIndex}
-										{@const existingWidget = layoutWidgets.find(w => w.row === rowIndex && w.column === columnIndex && w.width === 1)}
-										{#if existingWidget}
+						{#if layoutTree.length === 0}
+							<div class="layout-placeholder">
+								<p>👆 Add rows and drag widgets to build your app layout</p>
+								<p class="layout-note">This is a structural preview - use Preview button to see realistic rendering</p>
+							</div>
+						{:else}
+							{#each renderPhonePreview() as row}
+								<div class="layout-row">
+									{#each row.children as node}
+										{#if node.type === 'widget' && node.widget}
 											<div
-												class="widget-slot filled"
-												class:tall={existingWidget.height === 2}
-												draggable="true"
-												role="button"
-												tabindex="0"
-												on:dragstart={(e) => handleDragStart(e, existingWidget)}
+												class="widget-card layout-preview"
+												class:full-width={node.widget.width === 2}
+												class:tall={node.widget.height === 2}
 											>
-												<div class="placed-widget">
-													<div class="widget-header">
-														<span class="widget-icon">{existingWidget.icon}</span>
-														<span class="widget-name">{existingWidget.name}</span>
-														<div class="widget-controls">
-															<button
-																class="control-btn"
-																on:click={() => toggleWidgetWidth(existingWidget)}
-																title="Toggle width"
-															>
-																{existingWidget.width === 1 ? '⬌' : '⬍'}
-															</button>
-															<button
-																class="control-btn"
-																on:click={() => toggleWidgetHeight(existingWidget)}
-																title="Toggle height"
-															>
-																{existingWidget.height === 1 ? '⬆️' : '⬇️'}
-															</button>
-															<button
-																class="remove-widget control-btn"
-																on:click={() => removeWidget(existingWidget)}
-															>×</button>
-														</div>
-													</div>
-													<div class="widget-preview">Preview: {existingWidget.name}</div>
+												<div class="widget-header">
+													<span class="widget-icon">{node.widget.icon}</span>
+													<span class="widget-name">{node.widget.name}</span>
 												</div>
 											</div>
-										{:else}
-											{@const canDrop = !layoutWidgets.some(w =>
-												w.row < rowIndex + 1 && w.row + w.height > rowIndex &&
-												(w.width === 2 || (w.width === 1 && w.column === columnIndex))
-											)}
-											{#if canDrop}
-												<div
-													class="widget-slot empty"
-													role="button"
-													tabindex="0"
-													on:dragover={handleDragOver}
-													on:drop={(e) => handleDrop(e, rowIndex, columnIndex)}
-												>
-													<div class="drop-zone">
-														<span class="plus-icon">+</span>
-														<span>Drop Widget</span>
-													</div>
-												</div>
-											{/if}
 										{/if}
 									{/each}
-								{/if}
+								</div>
+							{/each}
+							<div class="layout-footer">
+								<p class="layout-note">📱 Layout structure preview - Click "Preview" for realistic rendering</p>
 							</div>
-						{/each}
+						{/if}
 					</div>
 				</div>
 			</div>
 		</div>
 
-		<!-- Available Widgets Panel -->
-		<div class="widgets-panel">
-			<h3>Widget Library</h3>
-			<div class="available-widgets">
-				{#if availableWidgets.length > 0}
-					{#each availableWidgets as widget}
+		<!-- Layout Structure Panel -->
+		<div class="layout-panel">
+			<div class="panel-header">
+				<h3>Layout Structure</h3>
+				<button class="add-row-btn" on:click={addRow}>+ Add Row</button>
+			</div>
+
+			<div class="layout-tree">
+				{#each layoutTree as row, rowIndex}
+					<div class="tree-row" class:selected={selectedNodeId === row.id}>
 						<div
-							class="widget-item"
-							draggable="true"
+							class="tree-node row-node"
 							role="button"
 							tabindex="0"
-							on:dragstart={(e) => handleDragStart(e, widget)}
+							on:dragover={handleDragOver}
+							on:dragleave={handleDragLeave}
+							on:drop={(e) => handleDropOnRow(e, row.id)}
 						>
-							<div class="widget-item-icon">{widget.icon}</div>
-							<div class="widget-item-info">
-								<div class="widget-item-name">{widget.name}</div>
-								<div class="widget-item-description">{widget.description}</div>
-								<div class="widget-item-meta">
-									{widget.width === 2 ? 'Full Width' : 'Half Width'} •
-									{widget.height === 2 ? 'Tall' : 'Normal'}
-								</div>
+							<span class="node-icon">📋</span>
+							<span class="node-label">Row {rowIndex + 1}</span>
+							<div class="node-actions">
+								<button class="action-btn" title="Delete row">🗑️</button>
 							</div>
 						</div>
-					{/each}
-				{:else}
-					<div class="all-widgets-placed">
-						<p>📱 All widgets are placed in the app!</p>
-						<p>You can:</p>
-						<ul>
-							<li>Drag widgets within the phone to rearrange</li>
-							<li>Use resize buttons (⬌ ⬆️) to change size</li>
-							<li>Remove widgets (×) to place them differently</li>
-						</ul>
+
+						{#if row.children && row.children.length > 0}
+							<div
+								class="tree-children"
+								role="group"
+								on:dragover={handleDragOver}
+								on:dragleave={handleDragLeave}
+								on:drop={(e) => handleDropOnRow(e, row.id)}
+							>
+								{#each row.children as child}
+									{#if child.type === 'widget' && child.widget}
+										<div
+											class="tree-node widget-node"
+											class:selected={selectedNodeId === child.id}
+											role="button"
+											tabindex="0"
+											draggable="true"
+											on:dragstart={(e) => handleDragStart(e, child.widget!, child.id)}
+											on:dragend={handleDragEnd}
+										>
+											<span class="node-icon">{child.widget.icon}</span>
+											<div class="node-content">
+												<span class="node-label">{child.widget.name}</span>
+												<span class="node-meta">{child.widget.width === 2 ? 'Full Width' : 'Half Width'}</span>
+											</div>
+											<div class="node-actions">
+												<button class="action-btn" on:click={() => removeWidget(child.id)} title="Remove widget">✕</button>
+											</div>
+										</div>
+									{/if}
+								{/each}
+							</div>
+						{:else}
+							<div
+								class="empty-row"
+								role="button"
+								tabindex="0"
+								on:dragover={handleDragOver}
+								on:dragleave={handleDragLeave}
+								on:drop={(e) => handleDropOnEmptyRow(e, row.id)}
+							>
+								<span class="empty-text">Drop widgets here</span>
+							</div>
+						{/if}
 					</div>
-				{/if}
+				{/each}
+			</div>
+
+			<div class="available-widgets-section">
+				<h4>Available Widgets</h4>
+				<div class="available-widgets">
+					{#each availableWidgets as widget}
+						<div
+							class="widget-card draggable"
+							role="button"
+							tabindex="0"
+							draggable="true"
+							on:dragstart={(e) => handleDragStart(e, widget)}
+							on:dragend={handleDragEnd}
+						>
+							<div class="widget-header">
+								<span class="widget-icon">{widget.icon}</span>
+								<span class="widget-name">{widget.name}</span>
+							</div>
+							<div class="widget-description">{widget.description}</div>
+							<div class="widget-meta">
+								{widget.width === 2 ? 'Full Width' : 'Half Width'} •
+								{widget.height === 2 ? 'Tall' : 'Normal'}
+							</div>
+						</div>
+					{/each}					{#if availableWidgets.length === 0}
+						<div class="no-available-widgets">
+							<p>All widgets are in use!</p>
+							<p>Remove widgets from the layout to place them elsewhere.</p>
+						</div>
+					{/if}
+				</div>
 			</div>
 		</div>
 </div>
